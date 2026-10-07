@@ -41,7 +41,7 @@ Rectangle {
     signal menuRequested(var item, var rect)
 
     clip: true
-    radius: Theme.radiusPill
+    radius: Theme.radiusCard
     color: "transparent"
     gradient: TileGlass {}
     border.width: 1

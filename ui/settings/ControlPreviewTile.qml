@@ -32,15 +32,9 @@ Item {
     signal contextMenuRequested(var entry, real gx, real gy)
     signal removed(var entry)
 
-    readonly property var info: entry ? ControlCatalog.info(entry.type) : null
-    readonly property string kind: info ? info.kind : "toggle"
-
     // Match the real control's corner so the selection outline sits exactly on
-    // its edge: toggle tiles are pills, the small buttons use the inner radius,
-    // everything else the card radius.
-    readonly property int outlineRadius: kind === "toggle"
-        ? Math.round(Math.min(width, height) / 2)
-        : (kind === "small" || kind === "action") ? Theme.radiusInner : Theme.radiusCard
+    // its edge. Every Control Center tile shares the card radius.
+    readonly property int outlineRadius: Theme.radiusCard
 
     readonly property var cell: entry
         ? ControlCatalog.rect(entry, cellW, rowH, gap)

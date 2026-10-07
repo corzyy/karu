@@ -4,7 +4,7 @@ import QtQuick.Layouts
 import "../../core/theme"
 
 /**
- * ToggleButton — a pill-shaped tile: circular icon + title + muted subtitle.
+ * ToggleButton — a rounded tile: circular icon + title + muted subtitle.
  *
  * Every tile shares the same surface fill and border. When `active` only the
  * icon circle picks up the accent color, signalling the toggle's state.
@@ -41,7 +41,7 @@ Rectangle {
     /// Everything a detail card needs to morph out of this tile. The fill is
     /// flattened over the island background so a tinted (active) tile hands
     /// over an opaque colour the card can start from. The radius is clamped to
-    /// half the height because that is the corner the pill actually renders.
+    /// half the height so a short slot never renders a mismatched corner.
     function tileGeometry() {
         var r = root.mapToItem(null, 0, 0, root.width, root.height)
         return {
@@ -56,7 +56,7 @@ Rectangle {
     }
 
     implicitHeight: Theme.toggleHeight
-    radius: Theme.radiusPill
+    radius: Theme.radiusCard
     opacity: suppressed ? 0 : 1
     enabled: !suppressed
 

@@ -8,10 +8,10 @@
   "radiusPanel": 30,
   "radiusCard": 18,
   "radiusInner": 17,
-  "notchMode": true,
+  "notchMode": false,
   "showStatusIcons": true,
   "mediaArtCircle": true,
-  "showMediaPlayer": false,
+  "showMediaPlayer": true,
   "clockSize": 15,
   "clockExpandedSize": 37,
   "clockDateSize": 12,
@@ -56,7 +56,7 @@
   "notificationTimeout": 2,
   "notificationMaxHistory": 50,
   "doNotDisturb": false,
-  "controlPanelWidth": 420,
+  "controlPanelWidth": 722,
   "toggleHeight": 56,
   "searchHeight": 38,
   "controlColumns": 7,
@@ -122,20 +122,13 @@
       "col": 0,
       "row": 4,
       "w": 7,
-      "h": 2
+      "h": 3
     },
     {
       "type": "tray",
       "col": 0,
-      "row": 6,
-      "w": 4,
-      "h": 1
-    },
-    {
-      "type": "nowplaying",
-      "col": 4,
-      "row": 6,
-      "w": 3,
+      "row": 7,
+      "w": 7,
       "h": 1
     }
   ],
@@ -148,10 +141,10 @@
   "lockRevealDuration": 520,
   "lockRevealStagger": 90,
   "lockLeaveDuration": 360,
-  "lockBlurMax": 60,
+  "lockBlurMax": 136,
   "lockDim": 0.38,
   "barMonitor": "DP-1",
   "overviewWidth": 880,
   "overviewMirrorWidth": 280,
-  "settingsDocked": true
+  "settingsDocked": false
 }

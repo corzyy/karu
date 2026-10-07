@@ -311,6 +311,7 @@ var pages = [
                 label: "Shell",
                 rows: [
                     { type: "action", action: "restart", title: "Restart shell", subtitle: "Reload every QML file." },
+                    { type: "action", action: "update", title: "Update shell", subtitle: "Pull the latest changes from GitHub and restart." },
                     { type: "action", action: "openconfig", title: "Open config folder", subtitle: "Reveal the Karu config directory." }
                 ]
             },

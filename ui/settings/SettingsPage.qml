@@ -122,6 +122,8 @@ Column {
     function runAction(action) {
         if (action === "restart")
             Quickshell.execDetached(["karu", "restart"])
+        else if (action === "update")
+            Quickshell.execDetached(["karu", "update"])
         else if (action === "openconfig")
             Quickshell.execDetached(["xdg-open", Quickshell.shellDir])
     }

@@ -4,6 +4,7 @@
 #
 #   karu start            Start the shell (single instance, detached)
 #   karu restart          Restart the shell
+#   karu update           Pull the latest commits and restart the shell
 #   karu close            Stop the shell
 #   karu launch <panel>   Open a panel: control | themes | wallpapers | session | launcher
 #   karu toggle <panel>   Toggle a panel open/closed
@@ -90,6 +91,40 @@ close() {
 restart() {
     close >/dev/null 2>&1 || true
     start
+}
+
+# Pull the latest commits from the upstream repo (github.com/corzyy/karu) and
+# restart the shell so the freshly fetched QML is loaded. The Settings app runs
+# this detached, so it survives the restart it triggers and can report the
+# outcome once the new shell's notification server is back up.
+update() {
+    if ! git -C "$CONFIG" rev-parse --git-dir >/dev/null 2>&1; then
+        send_notification "Karu update failed" "$CONFIG is not a git repository."
+        die "not a git repository: $CONFIG"
+    fi
+
+    local branch
+    branch="$(git -C "$CONFIG" symbolic-ref --short -q HEAD || echo main)"
+
+    if ! git -C "$CONFIG" pull --ff-only origin "$branch" >/dev/null 2>&1; then
+        send_notification "Karu update failed" "Could not pull the latest changes from corzyy/karu."
+        die "git pull failed"
+    fi
+
+    local rev
+    rev="$(git -C "$CONFIG" rev-parse --short HEAD)"
+
+    # Restart so the new QML takes effect, then announce it. The notification
+    # server belongs to the shell we just restarted, so retry until it answers.
+    restart >/dev/null 2>&1 || true
+    for _ in $(seq 1 20); do
+        if send_notification "Karu updated" "Shell updated to $rev and restarted." 2>/dev/null; then
+            break
+        fi
+        sleep 0.2
+    done
+
+    echo "karu: updated to $rev and restarted"
 }
 
 # Canonicalise the friendly panel names the QML IpcHandler understands.
@@ -253,6 +288,7 @@ karu — control the Karu Quickshell Dynamic Island
 Usage:
   karu start            Start the shell (single instance, detached)
   karu restart          Restart the shell
+  karu update           Pull the latest commits and restart the shell
   karu close            Stop the shell
   karu launch <panel>   Open a panel: control | themes | wallpapers | session | launcher
   karu toggle <panel>   Toggle a panel open/closed
@@ -279,6 +315,7 @@ cmd="${1:-help}"
 case "$cmd" in
     start)             start ;;
     restart)           restart ;;
+    update)            update ;;
     close|stop|kill)   close ;;
     launch|open)       launch "${1:-}" ;;
     toggle)            toggle "${1:-}" ;;

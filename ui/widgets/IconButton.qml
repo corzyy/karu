@@ -35,7 +35,7 @@ Rectangle {
 
     implicitWidth: Theme.toggleHeight
     implicitHeight: Theme.toggleHeight
-    radius: Theme.radiusInner
+    radius: Theme.radiusCard
     color: root.active ? Theme.accentMuted : "transparent"
     gradient: root.active ? null : glass
     border.width: 1
