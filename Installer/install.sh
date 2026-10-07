@@ -12,7 +12,26 @@
 
 set -uo pipefail
 
-HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+
+# ── Bootstrap (curl … | bash) ────────────────────────────────────────────────
+# The installer needs the scripts in lib/ and the bundled configs next to it.
+# When this file is piped in on its own (the one-line curl install), fetch the
+# repository into a temp dir and re-run the full installer from there.
+if [ ! -f "$HERE/lib/ui.sh" ]; then
+    _tarball="${KARU_INSTALL_TARBALL:-https://github.com/corzyy/karu/archive/refs/heads/main.tar.gz}"
+    _tmp="$(mktemp -d)"
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL "$_tarball" | tar -xz -C "$_tmp" || { printf 'karu: download failed\n' >&2; exit 1; }
+    elif command -v wget >/dev/null 2>&1; then
+        wget -qO- "$_tarball" | tar -xz -C "$_tmp" || { printf 'karu: download failed\n' >&2; exit 1; }
+    else
+        printf 'karu: curl or wget is required\n' >&2
+        exit 1
+    fi
+    exec bash "$_tmp/karu-main/Installer/install.sh" "$@"
+fi
+
 # shellcheck source=lib/ui.sh
 source "$HERE/lib/ui.sh"
 # shellcheck source=lib/env.sh

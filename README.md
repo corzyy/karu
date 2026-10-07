@@ -9,7 +9,5 @@ Fedora installer (dependencies, shell, Hyprland config and matugen themes) —
 see [`Installer/`](Installer/README.md):
 
 ```sh
-tmp="$(mktemp -d)" \
-  && curl -fsSL https://github.com/corzyy/karu/archive/refs/heads/main.tar.gz | tar -xz -C "$tmp" \
-  && "$tmp/karu-main/Installer/install.sh"
+curl -fsSL https://raw.githubusercontent.com/corzyy/karu/main/Installer/install.sh | bash
 ```

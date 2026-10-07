@@ -20,17 +20,17 @@ Installer/
 
 ### Quick install (curl)
 
-The installer needs its `lib/` scripts and bundled configs, so it downloads the
-repository and runs the TUI from the checkout. Run this **directly** (not
-piped to `bash`) so it keeps the terminal for the TUI:
-
 ```sh
-tmp="$(mktemp -d)" \
-  && curl -fsSL https://github.com/corzyy/karu/archive/refs/heads/main.tar.gz | tar -xz -C "$tmp" \
-  && "$tmp/karu-main/Installer/install.sh"
+curl -fsSL https://raw.githubusercontent.com/corzyy/karu/main/Installer/install.sh | bash
 ```
 
-Add `--yes` after `install.sh` for an unattended run.
+The script detects it was piped on its own, downloads the repository to a temp
+directory and re-runs itself from there (it needs its `lib/` scripts and the
+bundled configs). Add `-s -- --yes` for an unattended run:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/corzyy/karu/main/Installer/install.sh | bash -s -- --yes
+```
 
 ### From a checkout
 
