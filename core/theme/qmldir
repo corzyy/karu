@@ -1,0 +1,4 @@
+singleton GameMode 1.0 GameMode.qml
+singleton Theme 1.0 Theme.qml
+singleton Colors 1.0 Colors.qml
+singleton Themes 1.0 Themes.qml

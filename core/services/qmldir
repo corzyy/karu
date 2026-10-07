@@ -1,0 +1,5 @@
+singleton Brightness 1.0 Brightness.qml
+singleton Notifications 1.0 Notifications.qml
+singleton Polkit 1.0 Polkit.qml
+singleton Wallhaven 1.0 Wallhaven.qml
+singleton Wallpaper 1.0 Wallpaper.qml

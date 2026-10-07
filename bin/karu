@@ -1,0 +1,297 @@
+#!/usr/bin/env bash
+#
+# karu — control the Karu Quickshell "Dynamic Island".
+#
+#   karu start            Start the shell (single instance, detached)
+#   karu restart          Restart the shell
+#   karu close            Stop the shell
+#   karu launch <panel>   Open a panel: control | themes | wallpapers | session | launcher
+#   karu toggle <panel>   Toggle a panel open/closed
+#   karu settings [open|close]   Open, close or toggle the Settings app
+#   karu collapse         Collapse the island back to the pill
+#   karu gamemode [on|off]   Toggle the lightweight edge-to-edge Game Mode bar
+#   karu overview [open|close]   Toggle the Alt+Tab window overview
+#   karu lock             Lock the screen with the Karu lockscreen
+#   karu unlock           Release the lock (emergency / scripting)
+#   karu lockstate        Print "locked"/"unlocked" and whether it is secure
+#   karu status           Print whether the shell is running
+#   karu notify [summary] [body]   Send a desktop notification (for testing)
+#   karu notify-demo      Send five notifications in a row to see them stack
+#
+# The shell lives at $KARU_CONFIG (default ~/.config/karu) and is driven through
+# Quickshell's IPC — see the IpcHandler in shell.qml.
+
+set -euo pipefail
+
+CONFIG="${KARU_CONFIG:-$HOME/.config/karu}"
+QS="${KARU_QS:-qs}"
+
+# `karu` is usually invoked from a compositor keybind, whose environment may not
+# carry WAYLAND_DISPLAY. Fall back to the first Wayland socket in the runtime
+# directory so we can still start/attach to the shell.
+if [ -z "${XDG_RUNTIME_DIR:-}" ]; then
+    XDG_RUNTIME_DIR="/run/user/$(id -u)"
+    export XDG_RUNTIME_DIR
+fi
+if [ -z "${WAYLAND_DISPLAY:-}" ]; then
+    for sock in "$XDG_RUNTIME_DIR"/wayland-*; do
+        if [ -S "$sock" ]; then
+            export WAYLAND_DISPLAY="$(basename "$sock")"
+            break
+        fi
+    done
+fi
+
+die() { printf 'karu: %s\n' "$*" >&2; exit 1; }
+
+# True when an instance of this config is running.
+is_running() {
+    "$QS" list -p "$CONFIG" 2>/dev/null | grep -q 'Process ID:'
+}
+
+# True once the shell's `karu` IPC target has registered (it needs a moment
+# after launch, especially across a restart).
+ipc_ready() {
+    "$QS" ipc -p "$CONFIG" show 2>/dev/null | grep -q 'target karu'
+}
+
+start() {
+    if is_running; then
+        echo "karu: already running"
+        return 0
+    fi
+    setsid -f "$QS" -n -p "$CONFIG" >/dev/null 2>&1
+    for _ in $(seq 1 50); do
+        if is_running; then
+            echo "karu: started"
+            return 0
+        fi
+        sleep 0.1
+    done
+    die "failed to start the shell"
+}
+
+close() {
+    if ! is_running; then
+        echo "karu: not running"
+        return 0
+    fi
+    "$QS" kill -p "$CONFIG" >/dev/null 2>&1 || true
+    for _ in $(seq 1 50); do
+        if ! is_running; then
+            echo "karu: closed"
+            return 0
+        fi
+        sleep 0.1
+    done
+    die "timed out stopping the shell"
+}
+
+restart() {
+    close >/dev/null 2>&1 || true
+    start
+}
+
+# Canonicalise the friendly panel names the QML IpcHandler understands.
+panel_arg() {
+    case "$1" in
+        control|center|controlcenter) echo control ;;
+        theme|themes)                 echo themes ;;
+        wallpaper|wallpapers)         echo wallpapers ;;
+        session|power)                echo session ;;
+        app|apps|launcher|launch)     echo apps ;;
+        *) return 1 ;;
+    esac
+}
+
+# Start the shell if needed and wait until its IPC target is live.
+ensure_running() {
+    is_running || start >/dev/null
+    for _ in $(seq 1 50); do
+        if is_running && ipc_ready; then
+            return 0
+        fi
+        sleep 0.1
+    done
+    die "could not reach the running shell"
+}
+
+launch() {
+    local raw="${1:-}" panel
+    [ -n "$raw" ] || die "usage: karu launch <control|themes|wallpapers|session|launcher>"
+    panel="$(panel_arg "$raw")" || die "unknown panel '$raw'"
+    # This is normally a keybind and the bar is nearly always already up, so
+    # skip the readiness probing (three `qs` process spawns, ~120 ms) and call
+    # IPC directly; only start the shell if that first call fails.
+    if ! "$QS" ipc -p "$CONFIG" call karu open "$panel" >/dev/null 2>&1; then
+        ensure_running
+        "$QS" ipc -p "$CONFIG" call karu open "$panel" >/dev/null 2>&1 || true
+    fi
+    echo "karu: launched $panel"
+}
+
+toggle() {
+    local raw="${1:-}" panel
+    [ -n "$raw" ] || die "usage: karu toggle <control|themes|wallpapers|session|launcher>"
+    panel="$(panel_arg "$raw")" || die "unknown panel '$raw'"
+    # Same fast path as `launch`: try IPC first, probe only if it fails.
+    if ! "$QS" ipc -p "$CONFIG" call karu toggle "$panel" >/dev/null 2>&1; then
+        ensure_running
+        "$QS" ipc -p "$CONFIG" call karu toggle "$panel" >/dev/null 2>&1 || true
+    fi
+    echo "karu: toggled $panel"
+}
+
+collapse() {
+    is_running || die "the shell is not running (try 'karu start')"
+    "$QS" ipc -p "$CONFIG" call karu collapse >/dev/null 2>&1 || true
+    echo "karu: collapsed"
+}
+
+# Open / close / toggle the standalone Settings window. This is normally a
+# keybind (SUPER + comma), so call IPC directly and only start the shell if the
+# first call fails. Optional arg: open | close; no argument toggles.
+settings() {
+    if ! "$QS" ipc -p "$CONFIG" call karu settings "${1:-}" >/dev/null 2>&1; then
+        ensure_running
+        "$QS" ipc -p "$CONFIG" call karu settings "${1:-}" >/dev/null 2>&1 || true
+    fi
+    echo "karu: settings ${1:-toggle}"
+}
+
+# Toggle Game Mode (the flat, animation-free bar). Passing "on" / "off" forces
+# the state; no argument toggles. The Control Center tile uses a confirmation
+# prompt, this is the scriptable shortcut.
+gamemode() {
+    is_running || die "the shell is not running (try 'karu start')"
+    "$QS" ipc -p "$CONFIG" call karu gamemode "${1:-}" >/dev/null 2>&1 || true
+    local state
+    state="$("$QS" ipc -p "$CONFIG" call karu gamemodestate 2>/dev/null || true)"
+    if [ -n "$state" ]; then
+        echo "karu: game mode $state"
+    else
+        echo "karu: game mode toggled"
+    fi
+}
+
+overview() {
+    # This is normally a keybind, and the bar is nearly always already up, so
+    # skip the readiness probing and call IPC directly; only start the shell if
+    # that first call fails.
+    if ! "$QS" ipc -p "$CONFIG" call karu overview "${1:-}" >/dev/null 2>&1; then
+        ensure_running
+        "$QS" ipc -p "$CONFIG" call karu overview "${1:-}" >/dev/null 2>&1 || true
+    fi
+    echo "karu: overview ${1:-toggle}"
+}
+
+lock() {
+    ensure_running
+    "$QS" ipc -p "$CONFIG" call karu lock >/dev/null 2>&1 || true
+    echo "karu: locked"
+}
+
+unlock() {
+    is_running || die "the shell is not running"
+    "$QS" ipc -p "$CONFIG" call karu unlock >/dev/null 2>&1 || true
+    echo "karu: unlocked"
+}
+
+lockstate() {
+    is_running || die "the shell is not running"
+    "$QS" ipc -p "$CONFIG" call karu lockstate 2>/dev/null || die "could not read lock state"
+}
+
+status() {
+    if is_running; then
+        echo "karu: running"
+    else
+        echo "karu: stopped"
+        return 1
+    fi
+}
+
+# Send one desktop notification through the running server. Prefers
+# notify-send, and falls back to a raw Notify call over gdbus.
+send_notification() {
+    local summary="$1" body="$2"
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send -a Karu "$summary" "$body"
+    elif command -v gdbus >/dev/null 2>&1; then
+        gdbus call --session \
+            --dest org.freedesktop.Notifications \
+            --object-path /org/freedesktop/Notifications \
+            --method org.freedesktop.Notifications.Notify \
+            Karu 0 "" "$summary" "$body" "[]" "{}" 5000 >/dev/null
+    else
+        die "neither notify-send nor gdbus is available"
+    fi
+}
+
+# Send a single test notification, e.g. `karu notify "Build done" "All green"`.
+notify() {
+    ensure_running
+    send_notification "${1:-Karu}" "${2:-Test notification}"
+    echo "karu: sent notification"
+}
+
+# Fire a short burst so the stacking and slide-in animation are easy to see.
+notify_demo() {
+    ensure_running
+    local i
+    for i in 1 2 3 4 5; do
+        send_notification "Karu test $i/5" "Notification number $i — watch them stack."
+        sleep 0.5
+    done
+    echo "karu: sent 5 test notifications"
+}
+
+usage() {
+    cat <<'EOF'
+karu — control the Karu Quickshell Dynamic Island
+
+Usage:
+  karu start            Start the shell (single instance, detached)
+  karu restart          Restart the shell
+  karu close            Stop the shell
+  karu launch <panel>   Open a panel: control | themes | wallpapers | session | launcher
+  karu toggle <panel>   Toggle a panel open/closed
+  karu settings [open|close]   Open, close or toggle the Settings app
+  karu collapse         Collapse the island back to the pill
+  karu gamemode [on|off]   Toggle the lightweight edge-to-edge Game Mode bar
+  karu overview [open|close]   Toggle the Alt+Tab window overview
+  karu lock             Lock the screen with the Karu lockscreen
+  karu unlock           Release the lock (emergency / scripting)
+  karu lockstate        Print "locked"/"unlocked" and whether it is secure
+  karu status           Print whether the shell is running
+  karu notify [summary] [body]   Send a test notification (default: Karu)
+  karu notify-demo      Send five notifications in a row to see them stack
+
+Environment:
+  KARU_CONFIG   Config directory (default: ~/.config/karu)
+  KARU_QS       Quickshell binary (default: qs)
+EOF
+}
+
+cmd="${1:-help}"
+[ $# -gt 0 ] && shift || true
+
+case "$cmd" in
+    start)             start ;;
+    restart)           restart ;;
+    close|stop|kill)   close ;;
+    launch|open)       launch "${1:-}" ;;
+    toggle)            toggle "${1:-}" ;;
+    settings)          settings "${1:-}" ;;
+    collapse)          collapse ;;
+    gamemode)          gamemode "${1:-}" ;;
+    overview)          overview "${1:-}" ;;
+    lock)              lock ;;
+    unlock)            unlock ;;
+    lockstate)         lockstate ;;
+    status)            status ;;
+    notify)            notify "${1:-}" "${2:-}" ;;
+    notify-demo|notifydemo) notify_demo ;;
+    help|-h|--help)    usage ;;
+    *)                 die "unknown command '$cmd' (try 'karu help')" ;;
+esac
